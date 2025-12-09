@@ -17,7 +17,6 @@ st.set_page_config(
 
 # --- 2. HEADER FUNCTION ---
 def render_header():
-    # Use standard string for CSS to avoid syntax errors
     header_html = """
     <style>
         .tech-header-container {
@@ -73,8 +72,14 @@ def load_data():
 
     try:
         db = pd.read_csv(file_name)
-        for col in ['Roll', 'Reading', 'Qty']:
-            if col in db.columns: db[col] = pd.to_numeric(db[col], errors='coerce')
+        # Clean Data & Fix Floating Point "Drift"
+        if 'Roll' in db.columns: 
+            db['Roll'] = pd.to_numeric(db['Roll'], errors='coerce').round(2)
+        if 'Reading' in db.columns:
+            db['Reading'] = pd.to_numeric(db['Reading'], errors='coerce').round(1)
+        if 'Qty' in db.columns:
+            db['Qty'] = pd.to_numeric(db['Qty'], errors='coerce')
+            
         for col in ['MLI', 'Pitch', 'Tank']:
             if col in db.columns: db[col] = db[col].astype(str).str.strip()
         return db, None
@@ -103,23 +108,29 @@ def get_fuel_qty(mli, pitch, roll, reading, tank):
 
 if df_db is None:
     st.warning("⚠️ **Database Missing**")
-    st.info("Please upload 'Airbus_Fuel_Data.csv'")
+    st.info("Please ensure 'Airbus_Fuel_Data.csv' is uploaded.")
     st.stop()
 
-# --- 7. SIDEBAR ---
+# --- 7. SIDEBAR (MASTER CONTROLS) ---
 with st.sidebar:
     st.header("Flight Parameters")
     
-    avail_pitches = sorted(df_db['Pitch'].unique())
+    # 1. PITCH SELECTOR
+    avail_pitches = sorted(df_db['Pitch'].unique(), key=lambda x: float(x) if x.replace('.','',1).replace('-','',1).isdigit() else x)
     p_index = 0
+    # Try default to "0" or "0.0"
     for i, p in enumerate(avail_pitches):
-        if "0.0" in str(p): p_index = i
-    g_pitch = st.selectbox("Pitch Attitude", avail_pitches, index=p_index)
+        if p.replace('.0','').strip() == "0": p_index = i
+    g_pitch = st.selectbox("Pitch / Attitude Monitor", avail_pitches, index=p_index)
     
-    avail_rolls = sorted(df_db['Roll'].unique())
+    # 2. ROLL SELECTOR
+    # Only get rolls from Wing tanks (Center tank rolls are just 0.0)
+    wing_rolls = sorted(df_db[df_db['Tank'].isin(['Left','Right'])]['Roll'].unique())
+    
     r_index = 0
-    if 0.0 in avail_rolls: r_index = avail_rolls.index(0.0)
-    g_roll = st.selectbox("Roll Attitude", avail_rolls, index=r_index)
+    if 0.0 in wing_rolls: r_index = wing_rolls.index(0.0)
+    
+    g_roll = st.selectbox("Roll Attitude", wing_rolls, index=r_index)
     
     st.markdown("---")
     if st.button("Reset All"):
@@ -135,10 +146,19 @@ t1, t2, t3 = st.tabs(["Left Wing", "Center / ACT", "Right Wing"])
 
 def render_mli_input(label, key, tank_name):
     st.subheader(f"{label}")
+    
     if st.checkbox(f"{label} Empty", value=True, key=f"{key}_empty"):
         st.session_state[f"{key}_qty"] = 0
         st.info("0 KG")
         return
+
+    # Determine Active Roll for this tank
+    # Center Tank ignores global roll and uses 0.0
+    active_roll = g_roll
+    if tank_name == "Center":
+        active_roll = 0.0
+        # Optional: Show user that roll is ignored for Center
+        # st.caption(f"Using Roll: {active_roll} (Fixed)")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -146,22 +166,23 @@ def render_mli_input(label, key, tank_name):
         mli_val = st.selectbox(f"MLI Number", valid_mlis, key=f"{key}_mli")
         
     with c2:
+        # Filter Readings based on SIDEBAR Pitch/Roll
         subset = df_db[
             (df_db['Tank'] == tank_name) &
             (df_db['MLI'] == mli_val) &
             (df_db['Pitch'] == g_pitch) &
-            (np.isclose(df_db['Roll'], g_roll, atol=0.01))
+            (np.isclose(df_db['Roll'], active_roll, atol=0.01))
         ]
         valid_readings = sorted(subset['Reading'].unique())
         
         if not valid_readings:
-            st.warning("No Data")
+            st.warning(f"No Data for Pitch {g_pitch} / Roll {active_roll}")
             reading_val = 0.0
         else:
             reading_val = st.selectbox("Reading (mm)", valid_readings, key=f"{key}_read")
             
     if reading_val > 0:
-        qty = get_fuel_qty(mli_val, g_pitch, g_roll, reading_val, tank_name)
+        qty = get_fuel_qty(mli_val, g_pitch, active_roll, reading_val, tank_name)
         if qty is not None:
             st.success(f"✅ {int(qty)} KG")
             st.session_state[f"{key}_qty"] = qty
@@ -180,7 +201,7 @@ with t2:
         st.write("### ACT (Rear)")
         render_mli_input("ACT", "act", "ACT")
 
-# --- 10. UPDATE TOTALIZER (FIXED SYNTAX) ---
+# --- 10. UPDATE TOTALIZER ---
 total_fuel = (
     st.session_state.left_qty + 
     st.session_state.center_qty + 
@@ -190,7 +211,6 @@ total_fuel = (
 
 act_style_color = "#00FF00" if st.session_state.act_qty > 0 else "#555"
 
-# PART 1: CSS (Standard String - No curly brace errors)
 ecam_style = """
 <style>
     .ecam-panel {
@@ -228,7 +248,6 @@ ecam_style = """
 </style>
 """
 
-# PART 2: HTML Content (F-String for variables)
 ecam_content = f"""
 <div class="ecam-panel">
     <div class="ecam-header">
@@ -262,5 +281,4 @@ ecam_content = f"""
 </div>
 """
 
-# Combine and Clean
 totalizer_container.markdown((ecam_style + ecam_content).strip(), unsafe_allow_html=True)
