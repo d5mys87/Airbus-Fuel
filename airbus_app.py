@@ -72,7 +72,7 @@ def load_data():
 
     try:
         db = pd.read_csv(file_name)
-        # Clean Data & Fix Floating Point "Drift"
+        # Clean Data
         if 'Roll' in db.columns: 
             db['Roll'] = pd.to_numeric(db['Roll'], errors='coerce').round(2)
         if 'Reading' in db.columns:
@@ -81,7 +81,11 @@ def load_data():
             db['Qty'] = pd.to_numeric(db['Qty'], errors='coerce')
             
         for col in ['MLI', 'Pitch', 'Tank']:
-            if col in db.columns: db[col] = db[col].astype(str).str.strip()
+            if col in db.columns: 
+                db[col] = db[col].astype(str).str.strip()
+                # Remove "nan" strings if they exist
+                db = db[db[col].str.lower() != 'nan']
+                
         return db, None
     except Exception as e:
         return None, str(e)
@@ -115,17 +119,28 @@ if df_db is None:
 with st.sidebar:
     st.header("Flight Parameters")
     
+    # --- SAFE SORT FUNCTION (Fixes TypeError) ---
+    def safe_sort_key(val):
+        try:
+            # Try to convert to float for numeric sorting
+            return (0, float(val))
+        except:
+            # If text, sort alphabetically after numbers
+            return (1, str(val))
+
     # 1. PITCH SELECTOR
-    avail_pitches = sorted(df_db['Pitch'].unique(), key=lambda x: float(x) if x.replace('.','',1).replace('-','',1).isdigit() else x)
+    unique_pitches = df_db['Pitch'].dropna().unique()
+    avail_pitches = sorted(unique_pitches, key=safe_sort_key)
+    
+    # Default to "0" or "0.0"
     p_index = 0
-    # Try default to "0" or "0.0"
     for i, p in enumerate(avail_pitches):
-        if p.replace('.0','').strip() == "0": p_index = i
+        if str(p).replace('.0','').strip() == "0": p_index = i
+            
     g_pitch = st.selectbox("Pitch / Attitude Monitor", avail_pitches, index=p_index)
     
     # 2. ROLL SELECTOR
-    # Only get rolls from Wing tanks (Center tank rolls are just 0.0)
-    wing_rolls = sorted(df_db[df_db['Tank'].isin(['Left','Right'])]['Roll'].unique())
+    wing_rolls = sorted(df_db[df_db['Tank'].isin(['Left','Right'])]['Roll'].dropna().unique())
     
     r_index = 0
     if 0.0 in wing_rolls: r_index = wing_rolls.index(0.0)
@@ -152,13 +167,10 @@ def render_mli_input(label, key, tank_name):
         st.info("0 KG")
         return
 
-    # Determine Active Roll for this tank
-    # Center Tank ignores global roll and uses 0.0
+    # Determine Active Roll
     active_roll = g_roll
     if tank_name == "Center":
         active_roll = 0.0
-        # Optional: Show user that roll is ignored for Center
-        # st.caption(f"Using Roll: {active_roll} (Fixed)")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -166,7 +178,6 @@ def render_mli_input(label, key, tank_name):
         mli_val = st.selectbox(f"MLI Number", valid_mlis, key=f"{key}_mli")
         
     with c2:
-        # Filter Readings based on SIDEBAR Pitch/Roll
         subset = df_db[
             (df_db['Tank'] == tank_name) &
             (df_db['MLI'] == mli_val) &
