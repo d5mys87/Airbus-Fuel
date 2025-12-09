@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
+import textwrap
 
 # --- 1. CONFIGURATION ---
 if os.path.exists("airbus_logo.png"):
@@ -17,7 +18,8 @@ st.set_page_config(
 
 # --- 2. HEADER FUNCTION ---
 def render_header():
-    header_html = """
+    # textwrap.dedent fixes indentation issues automatically
+    header_html = textwrap.dedent("""
     <style>
         .tech-header-container {
             position: fixed; top: 0; left: 0; width: 100%;
@@ -57,7 +59,7 @@ def render_header():
             <span>MLI CHECK</span>
         </div>
     </div>
-    """
+    """)
     st.markdown(header_html, unsafe_allow_html=True)
 
 render_header()
@@ -185,7 +187,6 @@ def render_mli_input(label, key, tank_name):
             st.warning("No Data")
             reading_val = 0.0
         else:
-            # THIS WAS THE BROKEN LINE: Fixed below
             reading_val = st.selectbox("Reading (mm)", valid_readings, key=f"{key}_read")
             
     # Calculation
@@ -215,10 +216,10 @@ total_fuel = st.session_state.left_qty + st.session_state.center_qty + st.sessio
 
 act_style_color = "#00FF00" if st.session_state.act_qty > 0 else "#555"
 
-# PART 1: CSS (Standard String)
-ecam_style = """
+# We use textwrap.dedent to strip extra spaces so Markdown renders HTML correctly
+ecam_html = textwrap.dedent(f"""
 <style>
-    .ecam-panel {
+    .ecam-panel {{
         background-color: #000000;
         border: 3px solid #444;
         border-radius: 6px;
@@ -229,32 +230,29 @@ ecam_style = """
         display: flex;
         flex-direction: column;
         align-items: center;
-    }
-    .ecam-header {
+    }}
+    .ecam-header {{
         width: 100%; display: flex; justify-content: space-between;
         align-items: flex-end; border-bottom: 2px solid #555;
         padding-bottom: 8px; margin-bottom: 12px;
-    }
-    .ecam-label-fob { color: #00FFFF; font-size: 1.4rem; font-weight: bold; letter-spacing: 2px; }
-    .ecam-total { 
+    }}
+    .ecam-label-fob {{ color: #00FFFF; font-size: 1.4rem; font-weight: bold; letter-spacing: 2px; }}
+    .ecam-total {{ 
         font-size: 3rem; font-weight: bold; color: #00FF00; line-height: 1; 
         text-shadow: 0 0 5px rgba(0, 255, 0, 0.4);
-    }
-    .ecam-unit { font-size: 1.2rem; color: #00FFFF; margin-left: 8px; }
-    .ecam-tanks { width: 100%; display: flex; justify-content: space-between; padding: 0 10px; }
-    .tank-box { display: flex; flex-direction: column; align-items: center; width: 30%; }
-    .tank-name { color: #00FFFF; font-size: 1rem; margin-bottom: 4px; font-weight: bold; }
-    .tank-val { color: #00FF00; font-weight: bold; font-size: 1.5rem; }
-    .ecam-act {
+    }}
+    .ecam-unit {{ font-size: 1.2rem; color: #00FFFF; margin-left: 8px; }}
+    .ecam-tanks {{ width: 100%; display: flex; justify-content: space-between; padding: 0 10px; }}
+    .tank-box {{ display: flex; flex-direction: column; align-items: center; width: 30%; }}
+    .tank-name {{ color: #00FFFF; font-size: 1rem; margin-bottom: 4px; font-weight: bold; }}
+    .tank-val {{ color: #00FF00; font-weight: bold; font-size: 1.5rem; }}
+    .ecam-act {{
         margin-top: 15px; border-top: 1px dashed #333;
         padding-top: 8px; width: 100%; text-align: center;
         font-size: 1.1rem; font-weight: bold;
-    }
+    }}
 </style>
-"""
 
-# PART 2: HTML Content (F-String)
-ecam_content = f"""
 <div class="ecam-panel">
     <div class="ecam-header">
         <div style="display:flex; flex-direction:column;">
@@ -285,7 +283,6 @@ ecam_content = f"""
         ACT: {int(st.session_state.act_qty)}
     </div>
 </div>
-"""
+""")
 
-# 3. Combine and Clean
-totalizer_container.markdown((ecam_style + ecam_content).strip(), unsafe_allow_html=True)
+totalizer_container.markdown(ecam_html, unsafe_allow_html=True)
