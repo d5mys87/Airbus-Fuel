@@ -18,7 +18,6 @@ st.set_page_config(
 
 # --- 2. HEADER FUNCTION ---
 def render_header():
-    # textwrap.dedent fixes indentation issues automatically
     header_html = textwrap.dedent("""
     <style>
         .tech-header-container {
@@ -189,7 +188,7 @@ def render_mli_input(label, key, tank_name):
         else:
             reading_val = st.selectbox("Reading (mm)", valid_readings, key=f"{key}_read")
             
-    # Calculation
+    # Calculation (Allows 0 reading)
     qty = get_fuel_qty(mli_val, pitch_val, roll_val, reading_val, tank_name)
     
     if qty is not None:
@@ -211,12 +210,12 @@ with t2:
         st.write("### ACT (Rear)")
         render_mli_input("ACT", "act", "ACT")
 
-# --- 10. UPDATE TOTALIZER ---
+# --- 10. UPDATE TOTALIZER (With Indentation Fix) ---
 total_fuel = st.session_state.left_qty + st.session_state.center_qty + st.session_state.right_qty + st.session_state.act_qty
 
 act_style_color = "#00FF00" if st.session_state.act_qty > 0 else "#555"
 
-# We use textwrap.dedent to strip extra spaces so Markdown renders HTML correctly
+# textwrap.dedent removes the indentation so Streamlit sees HTML, not Code
 ecam_html = textwrap.dedent(f"""
 <style>
     .ecam-panel {{
