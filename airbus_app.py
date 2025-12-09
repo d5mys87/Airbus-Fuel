@@ -83,9 +83,8 @@ def load_data():
         for col in ['MLI', 'Pitch', 'Tank']:
             if col in db.columns: 
                 db[col] = db[col].astype(str).str.strip()
-                # Remove "nan" strings if they exist
+                # Remove "nan" strings
                 db = db[db[col].str.lower() != 'nan']
-                
         return db, None
     except Exception as e:
         return None, str(e)
@@ -115,39 +114,9 @@ if df_db is None:
     st.info("Please ensure 'Airbus_Fuel_Data.csv' is uploaded.")
     st.stop()
 
-# --- 7. SIDEBAR (MASTER CONTROLS) ---
+# --- 7. SIDEBAR ---
 with st.sidebar:
-    st.header("Flight Parameters")
-    
-    # --- SAFE SORT FUNCTION (Fixes TypeError) ---
-    def safe_sort_key(val):
-        try:
-            # Try to convert to float for numeric sorting
-            return (0, float(val))
-        except:
-            # If text, sort alphabetically after numbers
-            return (1, str(val))
-
-    # 1. PITCH SELECTOR
-    unique_pitches = df_db['Pitch'].dropna().unique()
-    avail_pitches = sorted(unique_pitches, key=safe_sort_key)
-    
-    # Default to "0" or "0.0"
-    p_index = 0
-    for i, p in enumerate(avail_pitches):
-        if str(p).replace('.0','').strip() == "0": p_index = i
-            
-    g_pitch = st.selectbox("Pitch / Attitude Monitor", avail_pitches, index=p_index)
-    
-    # 2. ROLL SELECTOR
-    wing_rolls = sorted(df_db[df_db['Tank'].isin(['Left','Right'])]['Roll'].dropna().unique())
-    
-    r_index = 0
-    if 0.0 in wing_rolls: r_index = wing_rolls.index(0.0)
-    
-    g_roll = st.selectbox("Roll Attitude", wing_rolls, index=r_index)
-    
-    st.markdown("---")
+    st.header("Settings")
     if st.button("Reset All"):
         for k in ['left_qty', 'center_qty', 'right_qty', 'act_qty']:
             st.session_state[k] = 0
@@ -167,33 +136,63 @@ def render_mli_input(label, key, tank_name):
         st.info("0 KG")
         return
 
-    # Determine Active Roll
-    active_roll = g_roll
-    if tank_name == "Center":
-        active_roll = 0.0
-
+    # 1. Select MLI
+    tank_data = df_db[df_db['Tank'] == tank_name]
+    valid_mlis = sorted(tank_data['MLI'].unique())
+    
     c1, c2 = st.columns(2)
     with c1:
-        valid_mlis = sorted(df_db[df_db['Tank'] == tank_name]['MLI'].unique())
         mli_val = st.selectbox(f"MLI Number", valid_mlis, key=f"{key}_mli")
-        
+    
+    # 2. Select Pitch (Specific to this Tank & MLI)
+    # Sort helper to handle numbers and text
+    def safe_sort_key(val):
+        try: return (0, float(val))
+        except: return (1, str(val))
+
+    mli_scope = tank_data[tank_data['MLI'] == mli_val]
+    valid_pitches = sorted(mli_scope['Pitch'].unique(), key=safe_sort_key)
+    
+    # Default to 0 if available
+    p_index = 0
+    for i, p in enumerate(valid_pitches):
+        if str(p).replace('.0','').strip() == "0": p_index = i
+
     with c2:
-        subset = df_db[
-            (df_db['Tank'] == tank_name) &
-            (df_db['MLI'] == mli_val) &
-            (df_db['Pitch'] == g_pitch) &
-            (np.isclose(df_db['Roll'], active_roll, atol=0.01))
-        ]
-        valid_readings = sorted(subset['Reading'].unique())
-        
+        # Dynamic label based on tank type
+        p_label = "Attitude Monitor" if tank_name == "Center" else "Pitch Attitude"
+        pitch_val = st.selectbox(p_label, valid_pitches, index=p_index, key=f"{key}_pitch")
+
+    # 3. Select Roll (Specific to this Tank/MLI/Pitch)
+    pitch_scope = mli_scope[mli_scope['Pitch'] == pitch_val]
+    valid_rolls = sorted(pitch_scope['Roll'].unique())
+    
+    c3, c4 = st.columns(2)
+    with c3:
+        # Only show Roll selector if there are choices other than 0.0
+        if len(valid_rolls) > 1 or (len(valid_rolls)==1 and valid_rolls[0] != 0):
+            # Default to 0
+            r_index = 0
+            if 0.0 in valid_rolls: r_index = valid_rolls.index(0.0)
+            roll_val = st.selectbox("Roll Attitude", valid_rolls, index=r_index, key=f"{key}_roll")
+        else:
+            roll_val = 0.0
+            st.info("Roll: 0.0 (Fixed)")
+
+    # 4. Select Reading
+    final_scope = pitch_scope[np.isclose(pitch_scope['Roll'], roll_val, atol=0.01)]
+    valid_readings = sorted(final_scope['Reading'].unique())
+    
+    with c4:
         if not valid_readings:
-            st.warning(f"No Data for Pitch {g_pitch} / Roll {active_roll}")
+            st.warning("No Data")
             reading_val = 0.0
         else:
             reading_val = st.selectbox("Reading (mm)", valid_readings, key=f"{key}_read")
             
+    # Calculation
     if reading_val > 0:
-        qty = get_fuel_qty(mli_val, g_pitch, active_roll, reading_val, tank_name)
+        qty = get_fuel_qty(mli_val, pitch_val, roll_val, reading_val, tank_name)
         if qty is not None:
             st.success(f"✅ {int(qty)} KG")
             st.session_state[f"{key}_qty"] = qty
@@ -201,6 +200,7 @@ def render_mli_input(label, key, tank_name):
             st.error("Not Found")
             st.session_state[f"{key}_qty"] = 0
 
+# Render Tabs
 with t1: render_mli_input("Left Wing", "left", "Left")
 with t3: render_mli_input("Right Wing", "right", "Right")
 
@@ -247,49 +247,4 @@ ecam_style = """
         text-shadow: 0 0 5px rgba(0, 255, 0, 0.4);
     }
     .ecam-unit { font-size: 1.2rem; color: #00FFFF; margin-left: 8px; }
-    .ecam-tanks { width: 100%; display: flex; justify-content: space-between; padding: 0 10px; }
-    .tank-box { display: flex; flex-direction: column; align-items: center; width: 30%; }
-    .tank-name { color: #00FFFF; font-size: 1rem; margin-bottom: 4px; font-weight: bold; }
-    .tank-val { color: #00FF00; font-weight: bold; font-size: 1.5rem; }
-    .ecam-act {
-        margin-top: 15px; border-top: 1px dashed #333;
-        padding-top: 8px; width: 100%; text-align: center;
-        font-size: 1.1rem; font-weight: bold;
-    }
-</style>
-"""
-
-ecam_content = f"""
-<div class="ecam-panel">
-    <div class="ecam-header">
-        <div style="display:flex; flex-direction:column;">
-            <span class="ecam-label-fob">FOB:</span>
-        </div>
-        <div style="display:flex; align-items:baseline;">
-            <span class="ecam-total">{int(total_fuel):,}</span>
-            <span class="ecam-unit">KG</span>
-        </div>
-    </div>
-
-    <div class="ecam-tanks">
-        <div class="tank-box">
-            <span class="tank-name">LEFT</span>
-            <span class="tank-val">{int(st.session_state.left_qty)}</span>
-        </div>
-        <div class="tank-box">
-            <span class="tank-name">CTR</span>
-            <span class="tank-val">{int(st.session_state.center_qty)}</span>
-        </div>
-        <div class="tank-box">
-            <span class="tank-name">RIGHT</span>
-            <span class="tank-val">{int(st.session_state.right_qty)}</span>
-        </div>
-    </div>
-
-    <div class="ecam-act" style="color: {act_style_color};">
-        ACT: {int(st.session_state.act_qty)}
-    </div>
-</div>
-"""
-
-totalizer_container.markdown((ecam_style + ecam_content).strip(), unsafe_allow_html=True)
+    .ecam-tanks { width: 100%; display: flex; justify-content: space-between
