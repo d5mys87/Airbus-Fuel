@@ -118,4 +118,72 @@ if df_db is None:
 with st.sidebar:
     st.header("Settings")
     if st.button("Reset All"):
-        for k in ['left_qty', 'center_qty
+        # This was the line causing the error - fixed below
+        for k in ['left_qty', 'center_qty', 'right_qty', 'act_qty']:
+            st.session_state[k] = 0
+        st.rerun()
+
+# --- 8. TOTALIZER PLACEHOLDER ---
+totalizer_container = st.empty()
+
+# --- 9. INPUT TABS ---
+t1, t2, t3 = st.tabs(["Left Wing", "Center / ACT", "Right Wing"])
+
+def render_mli_input(label, key, tank_name):
+    st.subheader(f"{label}")
+    
+    # Empty Checkbox (Defaults to True)
+    if st.checkbox(f"{label} Empty", value=True, key=f"{key}_empty"):
+        st.session_state[f"{key}_qty"] = 0
+        st.info("0 KG")
+        return
+
+    # 1. Select MLI
+    tank_data = df_db[df_db['Tank'] == tank_name]
+    valid_mlis = sorted(tank_data['MLI'].unique())
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        mli_val = st.selectbox(f"MLI Number", valid_mlis, key=f"{key}_mli")
+    
+    # 2. Select Pitch
+    def safe_sort_key(val):
+        try: return (0, float(val))
+        except: return (1, str(val))
+
+    mli_scope = tank_data[tank_data['MLI'] == mli_val]
+    valid_pitches = sorted(mli_scope['Pitch'].unique(), key=safe_sort_key)
+    
+    # Default Pitch to 0 if possible
+    p_index = 0
+    for i, p in enumerate(valid_pitches):
+        if str(p).replace('.0','').strip() == "0": p_index = i
+
+    with c2:
+        p_label = "Attitude Monitor" if tank_name == "Center" else "Pitch Attitude"
+        pitch_val = st.selectbox(p_label, valid_pitches, index=p_index, key=f"{key}_pitch")
+
+    # 3. Select Roll
+    pitch_scope = mli_scope[mli_scope['Pitch'] == pitch_val]
+    valid_rolls = sorted(pitch_scope['Roll'].unique())
+    
+    c3, c4 = st.columns(2)
+    with c3:
+        if len(valid_rolls) > 1 or (len(valid_rolls)==1 and valid_rolls[0] != 0):
+            r_index = 0
+            if 0.0 in valid_rolls: r_index = valid_rolls.index(0.0)
+            roll_val = st.selectbox("Roll Attitude", valid_rolls, index=r_index, key=f"{key}_roll")
+        else:
+            roll_val = 0.0
+            st.info("Roll: 0.0 (Fixed)")
+
+    # 4. Select Reading
+    final_scope = pitch_scope[np.isclose(pitch_scope['Roll'], roll_val, atol=0.01)]
+    valid_readings = sorted(final_scope['Reading'].unique())
+    
+    with c4:
+        if not valid_readings:
+            st.warning("No Data")
+            reading_val = 0.0
+        else:
+            reading_val = st.selectbox("Reading
