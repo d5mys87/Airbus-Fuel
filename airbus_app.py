@@ -171,4 +171,137 @@ def render_mli_input(label, key, tank_name):
         
         if not valid_readings:
             st.warning("No Data")
-            reading_val = 0
+            reading_val = 0.0
+        else:
+            reading_val = st.selectbox("Reading (mm)", valid_readings, key=f"{key}_read")
+            
+    # Calculation
+    if reading_val > 0:
+        qty = get_fuel_qty(mli_val, g_pitch, g_roll, reading_val, tank_name)
+        if qty is not None:
+            st.success(f"✅ {int(qty)} KG")
+            st.session_state[f"{key}_qty"] = qty
+        else:
+            st.error("Not Found")
+            st.session_state[f"{key}_qty"] = 0
+
+# Render Tabs
+with t1: render_mli_input("Left Wing", "left", "Left")
+with t3: render_mli_input("Right Wing", "right", "Right")
+
+with t2:
+    st.write("### Center Tank")
+    render_mli_input("Center Tank", "center", "Center")
+    st.markdown("---")
+    
+    # Only show ACT if data exists for it
+    if not df_db[df_db['Tank']=='ACT'].empty:
+        st.write("### ACT (Rear)")
+        render_mli_input("ACT", "act", "ACT")
+
+# --- 10. UPDATE TOTALIZER (FIXED SYNTAX) ---
+# Calculate totals
+total_fuel = (
+    st.session_state.left_qty + 
+    st.session_state.center_qty + 
+    st.session_state.right_qty + 
+    st.session_state.act_qty
+)
+
+# Define Style Variable
+act_style_color = "#00FF00" if st.session_state.act_qty > 0 else "#555"
+
+# PART 1: CSS (Standard String - No f-string confusion)
+ecam_style = """
+<style>
+    /* MAIN PANEL */
+    .ecam-panel {
+        background-color: #000000;
+        border: 3px solid #444;
+        border-radius: 6px;
+        padding: 15px 20px;
+        margin-bottom: 20px;
+        font-family: 'Consolas', 'Courier New', monospace;
+        box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    /* TOP SECTION */
+    .ecam-header {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        border-bottom: 2px solid #555;
+        padding-bottom: 8px;
+        margin-bottom: 12px;
+    }
+    .ecam-label-fob { color: #00FFFF; font-size: 1.4rem; font-weight: bold; letter-spacing: 2px; }
+    .ecam-total { 
+        font-size: 3rem; font-weight: bold; color: #00FF00; line-height: 1; 
+        text-shadow: 0 0 5px rgba(0, 255, 0, 0.4);
+    }
+    .ecam-unit { font-size: 1.2rem; color: #00FFFF; margin-left: 8px; }
+
+    /* MIDDLE SECTION */
+    .ecam-tanks {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        padding: 0 10px;
+    }
+    .tank-box { display: flex; flex-direction: column; align-items: center; width: 30%; }
+    .tank-name { color: #00FFFF; font-size: 1rem; margin-bottom: 4px; font-weight: bold; }
+    .tank-val { color: #00FF00; font-weight: bold; font-size: 1.5rem; }
+    
+    /* BOTTOM SECTION */
+    .ecam-act {
+        margin-top: 15px;
+        border-top: 1px dashed #333;
+        padding-top: 8px;
+        width: 100%;
+        text-align: center;
+        font-size: 1.1rem;
+        font-weight: bold;
+    }
+</style>
+"""
+
+# PART 2: HTML Content (F-String for variables)
+ecam_content = f"""
+<div class="ecam-panel">
+    <div class="ecam-header">
+        <div style="display:flex; flex-direction:column;">
+            <span class="ecam-label-fob">FOB:</span>
+        </div>
+        <div style="display:flex; align-items:baseline;">
+            <span class="ecam-total">{int(total_fuel):,}</span>
+            <span class="ecam-unit">KG</span>
+        </div>
+    </div>
+
+    <div class="ecam-tanks">
+        <div class="tank-box">
+            <span class="tank-name">LEFT</span>
+            <span class="tank-val">{int(st.session_state.left_qty)}</span>
+        </div>
+        <div class="tank-box">
+            <span class="tank-name">CTR</span>
+            <span class="tank-val">{int(st.session_state.center_qty)}</span>
+        </div>
+        <div class="tank-box">
+            <span class="tank-name">RIGHT</span>
+            <span class="tank-val">{int(st.session_state.right_qty)}</span>
+        </div>
+    </div>
+
+    <div class="ecam-act" style="color: {act_style_color};">
+        ACT: {int(st.session_state.act_qty)}
+    </div>
+</div>
+"""
+
+# Combine and Render
+totalizer_container.markdown(ecam_style + ecam_content, unsafe_allow_html=True)
