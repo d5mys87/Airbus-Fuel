@@ -17,6 +17,7 @@ st.set_page_config(
 
 # --- 2. HEADER FUNCTION ---
 def render_header():
+    # .strip() ensures no syntax errors in the HTML rendering
     header_html = """
     <style>
         .tech-header-container {
@@ -83,7 +84,7 @@ def load_data():
         for col in ['MLI', 'Pitch', 'Tank']:
             if col in db.columns: 
                 db[col] = db[col].astype(str).str.strip()
-                # Remove "nan" strings
+                # Remove "nan" strings if they exist
                 db = db[db[col].str.lower() != 'nan']
         return db, None
     except Exception as e:
@@ -122,7 +123,7 @@ with st.sidebar:
             st.session_state[k] = 0
         st.rerun()
 
-# --- 8. TOTALIZER PLACEHOLDER ---
+# --- 8. TOTALIZER PLACEHOLDER (Top of Screen) ---
 totalizer_container = st.empty()
 
 # --- 9. INPUT TABS ---
@@ -131,6 +132,7 @@ t1, t2, t3 = st.tabs(["Left Wing", "Center / ACT", "Right Wing"])
 def render_mli_input(label, key, tank_name):
     st.subheader(f"{label}")
     
+    # Empty Checkbox (Defaults to True)
     if st.checkbox(f"{label} Empty", value=True, key=f"{key}_empty"):
         st.session_state[f"{key}_qty"] = 0
         st.info("0 KG")
@@ -144,7 +146,7 @@ def render_mli_input(label, key, tank_name):
     with c1:
         mli_val = st.selectbox(f"MLI Number", valid_mlis, key=f"{key}_mli")
     
-    # 2. Select Pitch (Specific to this Tank & MLI)
+    # 2. Select Pitch
     def safe_sort_key(val):
         try: return (0, float(val))
         except: return (1, str(val))
@@ -152,7 +154,7 @@ def render_mli_input(label, key, tank_name):
     mli_scope = tank_data[tank_data['MLI'] == mli_val]
     valid_pitches = sorted(mli_scope['Pitch'].unique(), key=safe_sort_key)
     
-    # Default to 0 if available
+    # Default Pitch to 0 if possible
     p_index = 0
     for i, p in enumerate(valid_pitches):
         if str(p).replace('.0','').strip() == "0": p_index = i
@@ -161,7 +163,7 @@ def render_mli_input(label, key, tank_name):
         p_label = "Attitude Monitor" if tank_name == "Center" else "Pitch Attitude"
         pitch_val = st.selectbox(p_label, valid_pitches, index=p_index, key=f"{key}_pitch")
 
-    # 3. Select Roll (Specific to this Tank/MLI/Pitch)
+    # 3. Select Roll
     pitch_scope = mli_scope[mli_scope['Pitch'] == pitch_val]
     valid_rolls = sorted(pitch_scope['Roll'].unique())
     
@@ -186,15 +188,15 @@ def render_mli_input(label, key, tank_name):
         else:
             reading_val = st.selectbox("Reading (mm)", valid_readings, key=f"{key}_read")
             
-    # Calculation
-    if reading_val > 0:
-        qty = get_fuel_qty(mli_val, pitch_val, roll_val, reading_val, tank_name)
-        if qty is not None:
-            st.success(f"✅ {int(qty)} KG")
-            st.session_state[f"{key}_qty"] = qty
-        else:
-            st.error("Not Found")
-            st.session_state[f"{key}_qty"] = 0
+    # Calculation (UPDATED: Removed the > 0 check so 0 reading works)
+    qty = get_fuel_qty(mli_val, pitch_val, roll_val, reading_val, tank_name)
+    
+    if qty is not None:
+        st.success(f"✅ {int(qty)} KG")
+        st.session_state[f"{key}_qty"] = qty
+    else:
+        st.error("Not Found")
+        st.session_state[f"{key}_qty"] = 0
 
 # Render Tabs
 with t1: render_mli_input("Left Wing", "left", "Left")
@@ -213,82 +215,4 @@ total_fuel = (
     st.session_state.left_qty + 
     st.session_state.center_qty + 
     st.session_state.right_qty + 
-    st.session_state.act_qty
-)
-
-act_style_color = "#00FF00" if st.session_state.act_qty > 0 else "#555"
-
-# CSS STYLE (Standard String)
-ecam_style = """
-<style>
-    .ecam-panel {
-        background-color: #000000;
-        border: 3px solid #444;
-        border-radius: 6px;
-        padding: 15px 20px;
-        margin-bottom: 20px;
-        font-family: 'Consolas', 'Courier New', monospace;
-        box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-    .ecam-header {
-        width: 100%; display: flex; justify-content: space-between;
-        align-items: flex-end; border-bottom: 2px solid #555;
-        padding-bottom: 8px; margin-bottom: 12px;
-    }
-    .ecam-label-fob { color: #00FFFF; font-size: 1.4rem; font-weight: bold; letter-spacing: 2px; }
-    .ecam-total { 
-        font-size: 3rem; font-weight: bold; color: #00FF00; line-height: 1; 
-        text-shadow: 0 0 5px rgba(0, 255, 0, 0.4);
-    }
-    .ecam-unit { font-size: 1.2rem; color: #00FFFF; margin-left: 8px; }
-    .ecam-tanks { width: 100%; display: flex; justify-content: space-between; padding: 0 10px; }
-    .tank-box { display: flex; flex-direction: column; align-items: center; width: 30%; }
-    .tank-name { color: #00FFFF; font-size: 1rem; margin-bottom: 4px; font-weight: bold; }
-    .tank-val { color: #00FF00; font-weight: bold; font-size: 1.5rem; }
-    .ecam-act {
-        margin-top: 15px; border-top: 1px dashed #333;
-        padding-top: 8px; width: 100%; text-align: center;
-        font-size: 1.1rem; font-weight: bold;
-    }
-</style>
-"""
-
-# HTML CONTENT (F-String)
-ecam_content = f"""
-<div class="ecam-panel">
-    <div class="ecam-header">
-        <div style="display:flex; flex-direction:column;">
-            <span class="ecam-label-fob">FOB:</span>
-        </div>
-        <div style="display:flex; align-items:baseline;">
-            <span class="ecam-total">{int(total_fuel):,}</span>
-            <span class="ecam-unit">KG</span>
-        </div>
-    </div>
-
-    <div class="ecam-tanks">
-        <div class="tank-box">
-            <span class="tank-name">LEFT</span>
-            <span class="tank-val">{int(st.session_state.left_qty)}</span>
-        </div>
-        <div class="tank-box">
-            <span class="tank-name">CTR</span>
-            <span class="tank-val">{int(st.session_state.center_qty)}</span>
-        </div>
-        <div class="tank-box">
-            <span class="tank-name">RIGHT</span>
-            <span class="tank-val">{int(st.session_state.right_qty)}</span>
-        </div>
-    </div>
-
-    <div class="ecam-act" style="color: {act_style_color};">
-        ACT: {int(st.session_state.act_qty)}
-    </div>
-</div>
-"""
-
-# Combine
-totalizer_container.markdown((ecam_style + ecam_content).strip(), unsafe_allow_html=True)
+    st.session
