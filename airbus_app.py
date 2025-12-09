@@ -17,6 +17,7 @@ st.set_page_config(
 
 # --- 2. HEADER FUNCTION (Airbus Style) ---
 def render_header():
+    # We use a standard string here to avoid f-string syntax errors with CSS
     header_html = """
     <style>
         /* AIRBUS HEADER - Dark Blue */
@@ -111,7 +112,7 @@ def get_fuel_qty(mli, pitch, roll, reading, tank):
 # --- 6. NO DATA WARNING ---
 if df_db is None:
     st.warning("⚠️ **Database Missing**")
-    st.info("Please make sure 'Airbus_Fuel_Data.csv' is in the same folder.")
+    st.info("Please ensure 'Airbus_Fuel_Data.csv' is uploaded.")
     st.stop()
 
 # --- 7. SIDEBAR ---
@@ -138,7 +139,6 @@ with st.sidebar:
         st.rerun()
 
 # --- 8. TOTALIZER PLACEHOLDER (Always on View) ---
-# We create an empty container here at the top, and fill it at the end of the script
 totalizer_container = st.empty()
 
 # --- 9. INPUT TABS ---
@@ -171,132 +171,4 @@ def render_mli_input(label, key, tank_name):
         
         if not valid_readings:
             st.warning("No Data")
-            reading_val = 0.0
-        else:
-            reading_val = st.selectbox("Reading (mm)", valid_readings, key=f"{key}_read")
-            
-    # Calculation
-    if reading_val > 0:
-        qty = get_fuel_qty(mli_val, g_pitch, g_roll, reading_val, tank_name)
-        if qty is not None:
-            st.success(f"✅ {int(qty)} KG")
-            st.session_state[f"{key}_qty"] = qty
-        else:
-            st.error("Not Found")
-            st.session_state[f"{key}_qty"] = 0
-
-# Render Tabs
-with t1: render_mli_input("Left Wing", "left", "Left")
-with t3: render_mli_input("Right Wing", "right", "Right")
-
-with t2:
-    st.write("### Center Tank")
-    render_mli_input("Center Tank", "center", "Center")
-    st.markdown("---")
-    
-    # Only show ACT if data exists for it
-    if not df_db[df_db['Tank']=='ACT'].empty:
-        st.write("### ACT (Rear)")
-        render_mli_input("ACT", "act", "ACT")
-
-# --- 10. UPDATE TOTALIZER (ECAM STYLE) ---
-# Calculates the total and fills the container at the top of the page
-total_fuel = (
-    st.session_state.left_qty + 
-    st.session_state.center_qty + 
-    st.session_state.right_qty + 
-    st.session_state.act_qty
-)
-
-# ACT Style logic (Dim if 0, Bright if active)
-act_style = "color: #00FF00;" if st.session_state.act_qty > 0 else "color: #555;"
-
-ecam_html = f"""
-<style>
-    /* MAIN PANEL */
-    .ecam-panel {{
-        background-color: #000000;
-        border: 3px solid #444; /* Dark Grey Bezel */
-        border-radius: 6px;
-        padding: 15px 20px;
-        margin-bottom: 20px;
-        font-family: 'Consolas', 'Courier New', monospace; /* Monospace is critical for ECAM look */
-        box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }}
-    
-    /* TOP SECTION: FOB TOTAL */
-    .ecam-header {{
-        width: 100%;
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-end;
-        border-bottom: 2px solid #555;
-        padding-bottom: 8px;
-        margin-bottom: 12px;
-    }}
-    .ecam-label-fob {{ 
-        color: #00FFFF; /* CYAN for static labels */
-        font-size: 1.4rem; 
-        font-weight: bold; 
-        letter-spacing: 2px;
-    }}
-    .ecam-total {{ 
-        font-size: 3rem; 
-        font-weight: bold; 
-        color: #00FF00; /* GREEN for dynamic values */
-        line-height: 1; 
-        text-shadow: 0 0 5px rgba(0, 255, 0, 0.4);
-    }}
-    .ecam-unit {{ 
-        font-size: 1.2rem; 
-        color: #00FFFF; /* CYAN for units */
-        margin-left: 8px; 
-    }}
-
-    /* MIDDLE SECTION: TANKS */
-    .ecam-tanks {{
-        width: 100%;
-        display: flex;
-        justify-content: space-between;
-        padding: 0 10px;
-    }}
-    .tank-box {{ 
-        display: flex; 
-        flex-direction: column; 
-        align-items: center; 
-        width: 30%;
-    }}
-    .tank-name {{ 
-        color: #00FFFF; /* CYAN Labels */
-        font-size: 1rem; 
-        margin-bottom: 4px; 
-        font-weight: bold;
-    }}
-    .tank-val {{ 
-        color: #00FF00; /* GREEN Values */
-        font-weight: bold; 
-        font-size: 1.5rem; 
-    }}
-    
-    /* BOTTOM SECTION: ACT */
-    .ecam-act {{
-        margin-top: 15px;
-        border-top: 1px dashed #333;
-        padding-top: 8px;
-        width: 100%;
-        text-align: center;
-        font-size: 1.1rem;
-        font-weight: bold;
-    }}
-</style>
-
-<div class="ecam-panel">
-    <div class="ecam-header">
-        <div style="display:flex; flex-direction:column;">
-            <span class="ecam-label-fob">FOB:</span>
-        </div>
-        <div style="display:flex; align-items:baseline;">
-            <span class="ecam-total">{int(total_fuel):
+            reading_val = 0
