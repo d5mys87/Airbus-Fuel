@@ -145,7 +145,6 @@ def render_mli_input(label, key, tank_name):
         mli_val = st.selectbox(f"MLI Number", valid_mlis, key=f"{key}_mli")
     
     # 2. Select Pitch (Specific to this Tank & MLI)
-    # Sort helper to handle numbers and text
     def safe_sort_key(val):
         try: return (0, float(val))
         except: return (1, str(val))
@@ -159,7 +158,6 @@ def render_mli_input(label, key, tank_name):
         if str(p).replace('.0','').strip() == "0": p_index = i
 
     with c2:
-        # Dynamic label based on tank type
         p_label = "Attitude Monitor" if tank_name == "Center" else "Pitch Attitude"
         pitch_val = st.selectbox(p_label, valid_pitches, index=p_index, key=f"{key}_pitch")
 
@@ -169,9 +167,7 @@ def render_mli_input(label, key, tank_name):
     
     c3, c4 = st.columns(2)
     with c3:
-        # Only show Roll selector if there are choices other than 0.0
         if len(valid_rolls) > 1 or (len(valid_rolls)==1 and valid_rolls[0] != 0):
-            # Default to 0
             r_index = 0
             if 0.0 in valid_rolls: r_index = valid_rolls.index(0.0)
             roll_val = st.selectbox("Roll Attitude", valid_rolls, index=r_index, key=f"{key}_roll")
@@ -222,6 +218,7 @@ total_fuel = (
 
 act_style_color = "#00FF00" if st.session_state.act_qty > 0 else "#555"
 
+# CSS STYLE (Standard String)
 ecam_style = """
 <style>
     .ecam-panel {
@@ -247,4 +244,51 @@ ecam_style = """
         text-shadow: 0 0 5px rgba(0, 255, 0, 0.4);
     }
     .ecam-unit { font-size: 1.2rem; color: #00FFFF; margin-left: 8px; }
-    .ecam-tanks { width: 100%; display: flex; justify-content: space-between
+    .ecam-tanks { width: 100%; display: flex; justify-content: space-between; padding: 0 10px; }
+    .tank-box { display: flex; flex-direction: column; align-items: center; width: 30%; }
+    .tank-name { color: #00FFFF; font-size: 1rem; margin-bottom: 4px; font-weight: bold; }
+    .tank-val { color: #00FF00; font-weight: bold; font-size: 1.5rem; }
+    .ecam-act {
+        margin-top: 15px; border-top: 1px dashed #333;
+        padding-top: 8px; width: 100%; text-align: center;
+        font-size: 1.1rem; font-weight: bold;
+    }
+</style>
+"""
+
+# HTML CONTENT (F-String)
+ecam_content = f"""
+<div class="ecam-panel">
+    <div class="ecam-header">
+        <div style="display:flex; flex-direction:column;">
+            <span class="ecam-label-fob">FOB:</span>
+        </div>
+        <div style="display:flex; align-items:baseline;">
+            <span class="ecam-total">{int(total_fuel):,}</span>
+            <span class="ecam-unit">KG</span>
+        </div>
+    </div>
+
+    <div class="ecam-tanks">
+        <div class="tank-box">
+            <span class="tank-name">LEFT</span>
+            <span class="tank-val">{int(st.session_state.left_qty)}</span>
+        </div>
+        <div class="tank-box">
+            <span class="tank-name">CTR</span>
+            <span class="tank-val">{int(st.session_state.center_qty)}</span>
+        </div>
+        <div class="tank-box">
+            <span class="tank-name">RIGHT</span>
+            <span class="tank-val">{int(st.session_state.right_qty)}</span>
+        </div>
+    </div>
+
+    <div class="ecam-act" style="color: {act_style_color};">
+        ACT: {int(st.session_state.act_qty)}
+    </div>
+</div>
+"""
+
+# Combine
+totalizer_container.markdown((ecam_style + ecam_content).strip(), unsafe_allow_html=True)
