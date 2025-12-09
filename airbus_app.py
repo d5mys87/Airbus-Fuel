@@ -15,12 +15,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- 2. HEADER FUNCTION (Airbus Style) ---
+# --- 2. HEADER FUNCTION ---
 def render_header():
-    # .strip() removes extra whitespace so it renders as HTML, not code
+    # Use standard string for CSS to avoid syntax errors
     header_html = """
     <style>
-        /* AIRBUS HEADER - Dark Blue */
         .tech-header-container {
             position: fixed; top: 0; left: 0; width: 100%;
             height: 3.5rem; background-color: #00205B;
@@ -32,11 +31,9 @@ def render_header():
         }
         .block-container { padding-top: 5rem !important; }
         header[data-testid="stHeader"] { background-color: transparent; }
-        
-        /* ECAM TEXT STYLE */
         .tech-text {
             font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 0.9rem; color: #00FF00; /* ECAM Green */
+            font-size: 0.9rem; color: #00FF00;
             display: flex; gap: 20px; letter-spacing: 1px;
         }
         .ref-badge {
@@ -72,13 +69,10 @@ st.caption("Magnetic Level Indicator (MLI) Calculation")
 @st.cache_data
 def load_data():
     file_name = 'Airbus_Fuel_Data.csv'
-    
-    if not os.path.exists(file_name):
-        return None, "File Missing"
+    if not os.path.exists(file_name): return None, "File Missing"
 
     try:
         db = pd.read_csv(file_name)
-        # Clean Data
         for col in ['Roll', 'Reading', 'Qty']:
             if col in db.columns: db[col] = pd.to_numeric(db[col], errors='coerce')
         for col in ['MLI', 'Pitch', 'Tank']:
@@ -103,16 +97,13 @@ def get_fuel_qty(mli, pitch, roll, reading, tank):
         (df_db['Pitch'] == pitch) &
         (np.isclose(df_db['Roll'], roll, atol=0.01))
     ]
-    
     exact = subset[np.isclose(subset['Reading'], reading, atol=0.01)]
-    if not exact.empty:
-        return exact.iloc[0]['Qty']
+    if not exact.empty: return exact.iloc[0]['Qty']
     return None
 
-# --- 6. NO DATA WARNING ---
 if df_db is None:
     st.warning("⚠️ **Database Missing**")
-    st.info("Please ensure 'Airbus_Fuel_Data.csv' is uploaded.")
+    st.info("Please upload 'Airbus_Fuel_Data.csv'")
     st.stop()
 
 # --- 7. SIDEBAR ---
@@ -121,14 +112,12 @@ with st.sidebar:
     
     avail_pitches = sorted(df_db['Pitch'].unique())
     p_index = 0
-    # Try to set default Pitch to "0.0" if it exists
     for i, p in enumerate(avail_pitches):
         if "0.0" in str(p): p_index = i
     g_pitch = st.selectbox("Pitch Attitude", avail_pitches, index=p_index)
     
     avail_rolls = sorted(df_db['Roll'].unique())
     r_index = 0
-    # Try to set default Roll to 0.0
     if 0.0 in avail_rolls: r_index = avail_rolls.index(0.0)
     g_roll = st.selectbox("Roll Attitude", avail_rolls, index=r_index)
     
@@ -138,7 +127,7 @@ with st.sidebar:
             st.session_state[k] = 0
         st.rerun()
 
-# --- 8. TOTALIZER PLACEHOLDER (Always on View) ---
+# --- 8. TOTALIZER PLACEHOLDER ---
 totalizer_container = st.empty()
 
 # --- 9. INPUT TABS ---
@@ -146,8 +135,6 @@ t1, t2, t3 = st.tabs(["Left Wing", "Center / ACT", "Right Wing"])
 
 def render_mli_input(label, key, tank_name):
     st.subheader(f"{label}")
-    
-    # Default to Empty (Checked)
     if st.checkbox(f"{label} Empty", value=True, key=f"{key}_empty"):
         st.session_state[f"{key}_qty"] = 0
         st.info("0 KG")
@@ -155,12 +142,10 @@ def render_mli_input(label, key, tank_name):
 
     c1, c2 = st.columns(2)
     with c1:
-        # Filter valid MLIs for this tank
         valid_mlis = sorted(df_db[df_db['Tank'] == tank_name]['MLI'].unique())
         mli_val = st.selectbox(f"MLI Number", valid_mlis, key=f"{key}_mli")
         
     with c2:
-        # Filter valid readings for this configuration
         subset = df_db[
             (df_db['Tank'] == tank_name) &
             (df_db['MLI'] == mli_val) &
@@ -175,7 +160,6 @@ def render_mli_input(label, key, tank_name):
         else:
             reading_val = st.selectbox("Reading (mm)", valid_readings, key=f"{key}_read")
             
-    # Calculation
     if reading_val > 0:
         qty = get_fuel_qty(mli_val, g_pitch, g_roll, reading_val, tank_name)
         if qty is not None:
@@ -185,7 +169,6 @@ def render_mli_input(label, key, tank_name):
             st.error("Not Found")
             st.session_state[f"{key}_qty"] = 0
 
-# Render Tabs
 with t1: render_mli_input("Left Wing", "left", "Left")
 with t3: render_mli_input("Right Wing", "right", "Right")
 
@@ -193,13 +176,11 @@ with t2:
     st.write("### Center Tank")
     render_mli_input("Center Tank", "center", "Center")
     st.markdown("---")
-    
-    # Only show ACT if data exists for it
     if not df_db[df_db['Tank']=='ACT'].empty:
         st.write("### ACT (Rear)")
         render_mli_input("ACT", "act", "ACT")
 
-# --- 10. UPDATE TOTALIZER (FIXED) ---
+# --- 10. UPDATE TOTALIZER (FIXED SYNTAX) ---
 total_fuel = (
     st.session_state.left_qty + 
     st.session_state.center_qty + 
@@ -207,13 +188,11 @@ total_fuel = (
     st.session_state.act_qty
 )
 
-# ACT Style Variable (Green if active, Grey if empty)
 act_style_color = "#00FF00" if st.session_state.act_qty > 0 else "#555"
 
-# 1. CSS Styles (Plain String)
+# PART 1: CSS (Standard String - No curly brace errors)
 ecam_style = """
 <style>
-    /* MAIN PANEL */
     .ecam-panel {
         background-color: #000000;
         border: 3px solid #444;
@@ -226,16 +205,10 @@ ecam_style = """
         flex-direction: column;
         align-items: center;
     }
-    
-    /* TOP SECTION */
     .ecam-header {
-        width: 100%;
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-end;
-        border-bottom: 2px solid #555;
-        padding-bottom: 8px;
-        margin-bottom: 12px;
+        width: 100%; display: flex; justify-content: space-between;
+        align-items: flex-end; border-bottom: 2px solid #555;
+        padding-bottom: 8px; margin-bottom: 12px;
     }
     .ecam-label-fob { color: #00FFFF; font-size: 1.4rem; font-weight: bold; letter-spacing: 2px; }
     .ecam-total { 
@@ -243,32 +216,19 @@ ecam_style = """
         text-shadow: 0 0 5px rgba(0, 255, 0, 0.4);
     }
     .ecam-unit { font-size: 1.2rem; color: #00FFFF; margin-left: 8px; }
-
-    /* MIDDLE SECTION */
-    .ecam-tanks {
-        width: 100%;
-        display: flex;
-        justify-content: space-between;
-        padding: 0 10px;
-    }
+    .ecam-tanks { width: 100%; display: flex; justify-content: space-between; padding: 0 10px; }
     .tank-box { display: flex; flex-direction: column; align-items: center; width: 30%; }
     .tank-name { color: #00FFFF; font-size: 1rem; margin-bottom: 4px; font-weight: bold; }
     .tank-val { color: #00FF00; font-weight: bold; font-size: 1.5rem; }
-    
-    /* BOTTOM SECTION */
     .ecam-act {
-        margin-top: 15px;
-        border-top: 1px dashed #333;
-        padding-top: 8px;
-        width: 100%;
-        text-align: center;
-        font-size: 1.1rem;
-        font-weight: bold;
+        margin-top: 15px; border-top: 1px dashed #333;
+        padding-top: 8px; width: 100%; text-align: center;
+        font-size: 1.1rem; font-weight: bold;
     }
 </style>
 """
 
-# 2. HTML Content (Formatted String)
+# PART 2: HTML Content (F-String for variables)
 ecam_content = f"""
 <div class="ecam-panel">
     <div class="ecam-header">
@@ -277,4 +237,30 @@ ecam_content = f"""
         </div>
         <div style="display:flex; align-items:baseline;">
             <span class="ecam-total">{int(total_fuel):,}</span>
-            <span class="ecam
+            <span class="ecam-unit">KG</span>
+        </div>
+    </div>
+
+    <div class="ecam-tanks">
+        <div class="tank-box">
+            <span class="tank-name">LEFT</span>
+            <span class="tank-val">{int(st.session_state.left_qty)}</span>
+        </div>
+        <div class="tank-box">
+            <span class="tank-name">CTR</span>
+            <span class="tank-val">{int(st.session_state.center_qty)}</span>
+        </div>
+        <div class="tank-box">
+            <span class="tank-name">RIGHT</span>
+            <span class="tank-val">{int(st.session_state.right_qty)}</span>
+        </div>
+    </div>
+
+    <div class="ecam-act" style="color: {act_style_color};">
+        ACT: {int(st.session_state.act_qty)}
+    </div>
+</div>
+"""
+
+# Combine and Clean
+totalizer_container.markdown((ecam_style + ecam_content).strip(), unsafe_allow_html=True)
