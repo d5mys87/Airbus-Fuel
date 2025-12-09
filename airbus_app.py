@@ -17,7 +17,7 @@ st.set_page_config(
 
 # --- 2. HEADER FUNCTION (Airbus Style) ---
 def render_header():
-    # We use a standard string here to avoid f-string syntax errors with CSS
+    # .strip() removes extra whitespace so it renders as HTML, not code
     header_html = """
     <style>
         /* AIRBUS HEADER - Dark Blue */
@@ -199,8 +199,7 @@ with t2:
         st.write("### ACT (Rear)")
         render_mli_input("ACT", "act", "ACT")
 
-# --- 10. UPDATE TOTALIZER (FIXED SYNTAX) ---
-# Calculate totals
+# --- 10. UPDATE TOTALIZER (FIXED) ---
 total_fuel = (
     st.session_state.left_qty + 
     st.session_state.center_qty + 
@@ -208,10 +207,10 @@ total_fuel = (
     st.session_state.act_qty
 )
 
-# Define Style Variable
+# ACT Style Variable (Green if active, Grey if empty)
 act_style_color = "#00FF00" if st.session_state.act_qty > 0 else "#555"
 
-# PART 1: CSS (Standard String - No f-string confusion)
+# 1. CSS Styles (Plain String)
 ecam_style = """
 <style>
     /* MAIN PANEL */
@@ -269,7 +268,7 @@ ecam_style = """
 </style>
 """
 
-# PART 2: HTML Content (F-String for variables)
+# 2. HTML Content (Formatted String)
 ecam_content = f"""
 <div class="ecam-panel">
     <div class="ecam-header">
@@ -278,30 +277,4 @@ ecam_content = f"""
         </div>
         <div style="display:flex; align-items:baseline;">
             <span class="ecam-total">{int(total_fuel):,}</span>
-            <span class="ecam-unit">KG</span>
-        </div>
-    </div>
-
-    <div class="ecam-tanks">
-        <div class="tank-box">
-            <span class="tank-name">LEFT</span>
-            <span class="tank-val">{int(st.session_state.left_qty)}</span>
-        </div>
-        <div class="tank-box">
-            <span class="tank-name">CTR</span>
-            <span class="tank-val">{int(st.session_state.center_qty)}</span>
-        </div>
-        <div class="tank-box">
-            <span class="tank-name">RIGHT</span>
-            <span class="tank-val">{int(st.session_state.right_qty)}</span>
-        </div>
-    </div>
-
-    <div class="ecam-act" style="color: {act_style_color};">
-        ACT: {int(st.session_state.act_qty)}
-    </div>
-</div>
-"""
-
-# Combine and Render
-totalizer_container.markdown(ecam_style + ecam_content, unsafe_allow_html=True)
+            <span class="ecam
